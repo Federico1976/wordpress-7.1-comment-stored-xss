@@ -15,6 +15,29 @@ La vulnerabilità è stata corretta in **WordPress 7.1.1**.
 - Stato HackerOne: **Duplicate**
 - Report originale associato da WordPress/HackerOne: **#4009053**
 
+## Indice
+
+- [Timeline della disclosure](#timeline-della-disclosure)
+- [Sintesi](#sintesi)
+- [Impatto verificato](#impatto-verificato)
+- [Root cause](#root-cause)
+- [Catena causale verificata](#catena-causale-verificata)
+- [Condizioni della riproduzione](#condizioni-della-riproduzione)
+- [Correzione in WordPress 7.1.1](#correzione-in-wordpress-711)
+- [Proof of Concept minima](poc/minimal-xss.md)
+- [Analisi tecnica della root cause](analysis/root-cause.md)
+- [Confronto WordPress 7.1 vs 7.1.1](patches/7.1-vs-7.1.1.md)
+- [Responsible Disclosure](#responsible-disclosure)
+
+## Timeline della disclosure
+
+- **22 settembre 2026** — vulnerabilità riprodotta end-to-end su WordPress 7.1 in ambiente clean-room.
+- **22 settembre 2026** — invio del report HackerOne `#4050384` al programma WordPress.
+- **HackerOne / WordPress** — il report viene classificato come **Duplicate** del report `#4009053`.
+- **WordPress 7.1.1** — il fix modifica il parsing di `wpautop()` rendendolo consapevole dei valori di attributo quotati.
+- **23 settembre 2026** — retest della PoC originale su WordPress 7.1.1: nessun `onmouseover` materializzato e nessuna esecuzione JavaScript.
+- **23 settembre 2026** — pubblicazione di questo repository tecnico dopo la conferma del fix.
+
 ## Sintesi
 
 Un visitatore non autenticato può inviare un commento contenente markup consentito dal normale percorso di sanitizzazione di WordPress.
@@ -24,6 +47,31 @@ Il problema nasce successivamente durante il rendering del contenuto.
 Una particolare combinazione di sanitizzazione, `wpautop()`, trasformazioni successive e parsing finale del browser può modificare la struttura dell'HTML già sanitizzato e far reinterpretare testo controllato dall'attaccante come un vero attributo evento HTML.
 
 Nel test originale Chromium materializzava un attributo `onmouseover` sul `<blockquote>`, permettendo l'esecuzione di JavaScript nell'origine e nella sessione dell'utente autenticato che visualizzava il commento.
+
+## Impatto verificato
+
+La vulnerabilità è stata verificata oltre la semplice esecuzione JavaScript.
+
+Nel laboratorio, la Stored XSS eseguita nella sessione di un Administrator è stata utilizzata per:
+
+1. accedere a `/wp-admin/user-new.php` con la sessione autenticata della vittima;
+2. estrarre automaticamente il nonce `_wpnonce_create-user`;
+3. inviare la richiesta privilegiata di creazione utente;
+4. creare un nuovo account WordPress con ruolo `administrator`.
+
+La catena dimostrata è quindi:
+
+    Attaccante non autenticato
+        ->
+    Stored XSS nei commenti
+        ->
+    JavaScript nella sessione Administrator
+        ->
+    recupero nonce privilegiato
+        ->
+    creazione persistente di un nuovo Administrator
+
+La creazione dell'account privilegiato rappresenta la dimostrazione dell'impatto della XSS; non costituisce una vulnerabilità separata.
 
 ## Root cause
 
